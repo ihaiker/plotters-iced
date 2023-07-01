@@ -4,17 +4,14 @@
 // Copyright: 2022, Joylei <leingliu@gmail.com>
 // License: MIT
 
-use crate::error::Error;
-use crate::utils::{cvt_color, cvt_stroke, CvtPoint};
 use iced_graphics::{
     alignment::{Horizontal, Vertical},
     backend,
-    widget::canvas,
-    Backend, Size,
+    Backend,
+    Size, widget::canvas,
 };
 use iced_native::Font;
 use plotters_backend::{
-    text_anchor,
     BackendColor,
     BackendCoord,
     BackendStyle,
@@ -23,14 +20,18 @@ use plotters_backend::{
     DrawingErrorKind,
     FontFamily,
     FontStyle,
+    text_anchor,
     //FontTransform,
 };
 
+use crate::error::Error;
+use crate::utils::{cvt_color, cvt_stroke, CvtPoint};
+
 /// The Iced drawing backend
 pub(crate) struct IcedChartBackend<'a, B, F>
-where
-    B: Backend + backend::Text,
-    F: Fn(FontFamily, FontStyle) -> Font,
+    where
+        B: Backend + backend::Text,
+        F: Fn(FontFamily, FontStyle) -> Font,
 {
     frame: &'a mut canvas::Frame,
     backend: &'a B,
@@ -38,9 +39,9 @@ where
 }
 
 impl<'a, B, F> IcedChartBackend<'a, B, F>
-where
-    B: Backend + backend::Text,
-    F: Fn(FontFamily, FontStyle) -> Font,
+    where
+        B: Backend + backend::Text,
+        F: Fn(FontFamily, FontStyle) -> Font,
 {
     pub fn new(frame: &'a mut canvas::Frame, backend: &'a B, font_resolver: &'a F) -> Self {
         Self {
@@ -52,9 +53,9 @@ where
 }
 
 impl<'a, B, F> DrawingBackend for IcedChartBackend<'a, B, F>
-where
-    B: Backend + backend::Text,
-    F: Fn(FontFamily, FontStyle) -> Font,
+    where
+        B: Backend + backend::Text,
+        F: Fn(FontFamily, FontStyle) -> Font,
 {
     type ErrorType = Error;
 
@@ -95,7 +96,9 @@ where
         if style.color().alpha == 0.0 {
             return Ok(());
         }
-        let line = canvas::Path::line(from.cvt_point(), to.cvt_point());
+        let from = plotters_point_to_mid(from.cvt_point());
+        let to = plotters_point_to_mid(to.cvt_point());
+        let line = canvas::Path::line(from, to);
         self.frame.stroke(&line, cvt_stroke(style));
         Ok(())
     }
@@ -113,14 +116,11 @@ where
         }
         let height = (bottom_right.1 - upper_left.1) as f32;
         let width = (bottom_right.0 - upper_left.0) as f32;
-        let upper_left = upper_left.cvt_point();
+        let upper_left = plotters_point_to_mid(upper_left.cvt_point());
         if fill {
-            self.frame.fill_rectangle(
-                upper_left,
-                Size::new(width, height),
-                cvt_color(&style.color()),
-            );
+            self.frame.fill_rectangle(upper_left, Size::new(width, height ), cvt_color(&style.color()));
         } else {
+            let upper_left = plotters_point_to_mid(upper_left);
             let rect = canvas::Path::rectangle(upper_left, Size::new(width, height));
             self.frame.stroke(&rect, cvt_stroke(style));
         }
@@ -129,7 +129,7 @@ where
     }
 
     #[inline]
-    fn draw_path<S: BackendStyle, I: IntoIterator<Item = BackendCoord>>(
+    fn draw_path<S: BackendStyle, I: IntoIterator<Item=BackendCoord>>(
         &mut self,
         path: I,
         style: &S,
@@ -163,7 +163,8 @@ where
             return Ok(());
         }
 
-        let circle = canvas::Path::circle(center.cvt_point(), radius as f32);
+        let center = plotters_point_to_mid(center.cvt_point());
+        let circle = canvas::Path::circle(center, radius as f32);
 
         if fill {
             self.frame.fill(&circle, cvt_color(&style.color()));
@@ -175,7 +176,7 @@ where
     }
 
     #[inline]
-    fn fill_polygon<S: BackendStyle, I: IntoIterator<Item = BackendCoord>>(
+    fn fill_polygon<S: BackendStyle, I: IntoIterator<Item=BackendCoord>>(
         &mut self,
         vert: I,
         style: &S,
@@ -279,5 +280,12 @@ where
         // Notice: currently Iced has limitations, because widgets are not rendered in the order of creation, and different primitives go to different render pipelines.
 
         Ok(())
+    }
+}
+
+fn plotters_point_to_mid(p: iced_native::Point) -> iced_native::Point {
+    iced_native::Point {
+        x: p.x + 0.5,
+        y: p.y + 0.5,
     }
 }
